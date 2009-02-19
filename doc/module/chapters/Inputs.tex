@@ -1,0 +1,340 @@
+\chapter{Inputs}
+
+Inputs are generic devices which generate packets. They are specialized
+by a provided driver, which is responsible of building packets 
+(e.g. using datas from a device, a file, a random source).
+
+%
+% SECTION How to write an input driver
+%
+\section{How to write an input driver}
+
+An input driver is built by three functions: \texttt{init} 
+(described section \ref{sect:input_init}),
+\texttt{destroy} (\ref{sect:input_destroy}) \& \texttt{run}
+(\ref{sect:input_run}).
+
+% Chain driver user functions list
+\begin{itemize}
+\item \texttt{init} is called when the input 
+initialize. It is a good place if you want to allocate data or 
+save options passed by the input layer.
+\item \texttt{destroy} is called by the input when it 
+is destroying. Free ressources allocated into \texttt{init} if
+needef.
+\item \texttt{run} which is called exactly one time, should generate 
+multiple packets and send them using a function pointer passed in
+arguments. A pointer to the ressources that may have been
+allocated into \texttt{init} is passed as an argument of this
+call.
+\end{itemize}
+
+Once you you have written theses functions, you have to reference them
+into a \texttt{mt\_input\_driver\_t} (\ref{sect:input_input_driver_t})
+structure and pass it to the input driver register function to make
+it available to the \textcolor{darkblue}{Multitouch} inputs.
+
+%
+% SECTION API
+%
+\section{API}
+
+%
+% SUBSECTION init
+%
+\subsection{init}
+\label{sect:input_init}
+
+The \texttt{init} function is defined by::
+\begin{lstlisting}[language=C,
+caption=Input's init function prototype]
+int 
+my_init_function
+                (const mt_input_t * input,
+                mt_input_driver_data_t ** driver_data, 
+                const peach_hash_t * options);
+\end{lstlisting}
+Where: 
+% init function arguments list 
+\begin{itemize}
+\item \texttt{options} is a hash table containing options passed 
+to the input.
+\item \texttt{driver\_data} is a pointer of pointer to a 
+\texttt{mt\_input\_driver\_data\_t} structure you may define in 
+your source file according to the figure \footnote{Pay attention 
+to the underscore in front of the name of the structure: you must define 
+\texttt{\_input\_driver\_data\_t} and not
+\texttt{input\_driver\_data\_t}.}:
+% _chain_layer_driver_data_t Figure
+\begin{lstlisting}[language=C,
+caption=\_mt\_input\_driver\_data\_t structure]
+struct _mt_input_driver_data_t
+{
+    int whatever;
+    [...]
+};
+\end{lstlisting}
+If your input does \textbf{not} store data, you do \textbf{not} have to define 
+the structure, either setting the value of \texttt{*driver\_data}.
+\end{itemize}
+
+%
+% SUBSECTION destroy
+%
+\subsection{destroy}
+\label{sect:input_destroy}
+The \texttt{destroy} function is defined by:
+% destroy function Figure
+\begin{lstlisting}[language=C,
+caption=Input's destroy function prototype]
+int 
+my_destroy_function
+                (const mt_input_t * input,
+                mt_input_driver_data_t * driver_data);
+\end{lstlisting}
+Where:
+% destroy funtion arguments list
+\begin{itemize}
+\item \texttt{input} is a pointer to the current input.
+It could be used to retrieve its name.
+\item \texttt{driver\_data} is a pointer to the area the 
+\texttt{init} function may have allocated, or is undefined if 
+the \texttt{init} function did not set its value.
+\end{itemize}
+
+It is responsible of freeing ressources the \texttt{init} function 
+may have allocated and can do further actions. 
+
+%
+% SUBSECTION run 
+%
+\subsection{run}
+\label{sect:input_run}
+The \texttt{run} function is defined by:
+% run function Figure
+\begin{lstlisting}[language=C,
+caption=Input's run function prototype]
+int 
+my_run_function
+                (const mt_input_t * input,
+                mt_input_driver_data_t * driver_data,
+                mt_input_driver_commit_t driver_commit,
+                mt_input_driver_must_stop_polling_t, 
+                            must_stop_polling_on);
+\end{lstlisting}
+Where:
+% transmit function arguments list
+\begin{itemize}
+\item \texttt{input} can be used to retreive the name of the input.
+\item \texttt{driver\_data} is the pointer, defined or not, to the
+area the \texttt{init} function may have allocated.
+\item \texttt{driver\_commit} is a function pointer which must be called on 
+the built packet, to forward it to the output(s). Here is its definition:
+% commit function Figure
+\begin{lstlisting}[language=C,
+caption=Input's commit function pointer definition]
+typedef int
+(*mt_input_driver_commit_t)
+            (const mt_input_t * input,
+            const mt_packet_t * packet);
+\end{lstlisting}
+The \texttt{input} argument of this function is the \texttt{input} argument
+of the \textit{input's run function}.
+\item \texttt{must\_stop\_polling\_on} is a function pointer used to ensure
+the polling must continue:
+\begin{lstlisting}[language=C,
+caption=Input's continuation test function pointer definition]
+typedef int
+(*mt_input_driver_must_stop_polling_t)
+            (const mt_input_t * input);
+\end{lstlisting}
+The \texttt{input} argument of this function is the \texttt{input} argument
+of the \textit{input's run function}.
+\end{itemize}
+
+This function is responsible of forging packets. It could build them by:
+% transits function actions list
+\begin{itemize}
+\item Computing data from a system device opened in the \texttt{init} function.
+\item Reading a file.
+\item ect..
+\end{itemize}
+
+The \texttt{run} function is called only one time, and is exited only when
+the input is destroying (i.e. \texttt{must\_stop\_polling\_on} returns \texttt{1}
+and \texttt{SIGUSR1} has been sent to the current thread).
+Blocking read could be performed into the \texttt{run} function, as the 
+\texttt{SIGUSR1} will interrupt the read and permit exit.
+Access to the \texttt{driver\_data} do \textbf{not} need to be serialized, 
+because this area is \textbf{not} accessed by an other function until
+\texttt{run} has exited.
+
+
+%
+% SUBSECTION input_layer_driver_t
+%
+\subsection{mt\_input\_driver\_t}
+\label{sect:input_input_driver_t}
+As usual, a structure is provided to pass to the input driver system the
+three written functions : \texttt{init}
+(line \ref{code:input_init_pointer}), 
+\texttt{destroy} (line \ref{code:input_destroy_pointer}) \& 
+\texttt{run} (line \ref{code:input_run_pointer}). Your functions 
+must receive the same type of argument as the three function pointers 
+described into the structure and return the same type:
+% chain_layer_driver_t Figure
+\begin{lstlisting}[escapeinside={//}{\^^M}, language=C,
+caption=mt\_input\_driver\_t structure]
+typedef struct 
+{
+    int 
+    (*init)     //\label{code:input_init_pointer}
+                (const mt_input_t * input,
+                mt_input_driver_data_t ** driver_data, 
+                const peach_hash_t * options);
+
+    int 
+    (*destroy)  //\label{code:input_destroy_pointer}
+                (const mt_input_t * input,
+                mt_input_driver_data_t * driver_data);
+
+    int
+    (*run)  //\label{code:input_run_pointer}
+                (const mt_input_t * input,
+                mt_input_driver_data_t * driver_data,
+                mt_input_driver_commit_t driver_commit,
+                mt_input_driver_must_stop_polling_t
+                            must_stop_polling_on);
+}
+mt_chain_layer_driver_t;
+\end{lstlisting}
+
+%
+% SUBSECTION Registering & unregistering input driver
+%
+\subsection{Registering \& Unregistering driver}
+\label{sect:input_driver_register}
+\label{sect:input_driver_unregister}
+
+To register an input driver you have to call, providing a name 
+to reference the driver, the \texttt{mt\_input\_driver\_register} 
+function. Hence you will be able to use this input driver in the 
+\textcolor{darkblue}{Multitouch} library's functions related to input,
+by giving this name in the arguments.
+To unregister your driver, call the \texttt{mt\_input\_driver\_unregister} 
+function as describes in the next figure:
+\begin{lstlisting}[language=C,
+caption=Input's driver management functions]
+extern int
+mt_input_driver_register
+        (const char * name,
+        const mt_input_driver_t * input_driver);
+
+extern int
+mt_input_driver_unregister
+        (const char * name);
+\end{lstlisting}
+
+%
+% SECTION Setup examples
+%
+\section{Setup examples}
+TODO
+
+%
+% SECTION Example
+%
+\section{Complete module example}
+
+This module defines a null input driver which does \textbf{not} emit any packet:
+\begin{lstlisting}[language=C,
+caption=Complete Input \& Module example]
+#include "peach/module.h"
+#include "peach/log.h"
+#include "lib/input.h"
+
+static int 
+input_example_driver_init
+            (mt_input_driver_data_t ** driver_data, 
+            const peach_hash_t * options)
+{
+    /* We do not need to store any data, so 'driver_data'
+     * is kept untouched
+     */
+    return 0;
+}
+
+static int 
+input_example_driver_destroy
+            (mt_input_driver_data_t * driver_data)
+{
+    return 0;
+}
+
+static int
+input_example_driver_run
+            (const mt_input_t * input,
+            mt_input_driver_data_t * driver_data,
+            mt_input_driver_commit_t driver_commit,
+            mt_input_driver_must_stop_polling_t 
+                        must_stop_polling_on)
+{
+    /* Loop until the input is destroying 
+     * (i.e must_stop_polling_on(input) return true.
+     */
+    while (!(*must_stop_polling_on)(input)) {
+
+        /* Wait for the SIGUSR1 signal, that means the 
+         * input is destroying.
+         * Here is the place where the driver should 
+         * poll data from a device using read() for 
+         * example and call 'driver_commit' on the 
+         * forged packet.
+         */
+        pause();
+    }
+
+    return 0;
+}
+
+/* This structure store the address of the three
+ * driver's functions
+ */
+static mt_input_driver_t _example_driver =
+{
+    .init = input_example_driver_init,
+    .destroy = input_example_driver_destroy,
+    .run = input_example_driver_run
+};
+
+static int
+example_module_init(void)
+{
+    /* Register our drivers by passing the address
+     * of the mt_input_driver_t structure
+     * filled with the three driver's functions 
+     */
+    if (mt_input_driver_register("example", 
+                &_example_driver) != 0) 
+        goto exit_with_failure;
+
+    return 0;
+
+exit_with_failure:
+    return -1;
+}
+
+static int
+example_module_exit(void)
+{
+    /* Unregister all drivers */
+    mt_input_driver_unregister("example");
+    
+    return 0;
+}
+
+PEACH_MODULE_REGISTER("my_example_module", 1,
+            example_module_init,
+            example_module_exit)
+
+\end{lstlisting}

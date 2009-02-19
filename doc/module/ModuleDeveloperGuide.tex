@@ -1,0 +1,68 @@
+\documentclass{report}
+\usepackage{listings}
+\usepackage{graphicx}
+\usepackage[usenames]{color}
+\usepackage[english]{babel}
+
+\definecolor{darkblue}{rgb}{0,0.08,0.45}
+\definecolor{lightgrey}{rgb}{0.97,0.97,0.97}
+\definecolor{lightgreen}{rgb}{0.13,0.54,0.13}
+\definecolor{lightblue}{rgb}{0.33,0.33,0.74}
+\definecolor{lightred}{rgb}{0.54,0.13,0.13}
+
+\lstset{frame=lines, numbers=left, frameround=ffff,
+commentstyle=\color{lightblue}, stringstyle=\color{lightred},
+keywordstyle=\color{lightgreen}, backgroundcolor=\color{lightgrey},
+showstringspaces=false}
+
+\begin{document}
+
+%
+% TITLE
+%
+\title
+{
+    \textcolor{darkblue}{Multitouch library} 1.0.0 \\
+    \textbf{Driver Development Guideline}
+}
+\author
+{
+    David Keller \\ 
+    \textless\textcolor{darkblue}{\texttt{keller@efrei.fr}}\textgreater
+}
+\date{\today}
+\maketitle
+
+%
+% ABSTRACT
+%
+\begin{abstract}
+This document is intended for developers who want to use the 
+\textcolor{darkblue}{Multitouch} library to fit particular purposes.
+It describes the part of the library api dedicated to the extensions,
+and shows some examples.
+\end{abstract}
+
+%
+% TABLE OF CONTENTS
+%
+\tableofcontents
+\pagestyle{headings}
+
+%
+% CONTENTS
+%
+\part{\textcolor{darkblue}{Introduction}}
+\include{chapters/Introduction}
+
+\part{\textcolor{darkblue}{Modules}}
+\include{chapters/Modules}
+
+\part{\textcolor{darkblue}{Drivers}}
+\include{chapters/ProcessingEngines}
+\include{chapters/Inputs}
+\include{chapters/Outputs}
+
+\lstlistoflistings
+
+\end{document}

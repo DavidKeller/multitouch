@@ -1,0 +1,339 @@
+\chapter{Outputs}
+
+Outputs are generic devices which receive packets. They are specialized
+by a provided driver, which is responsible of processing
+received packets (e.g. writing them into a file, distributing them over the 
+network, to another device).
+
+%
+% SECTION How to write a processing engine
+%
+\section{How to write an output driver}
+
+An output driver is built by three functions: \texttt{init} 
+(described section \ref{sect:output_init}),
+\texttt{destroy} (\ref{sect:output_destroy}) \& \texttt{transmit}
+(\ref{sect:output_transmit}).
+
+% Chain driver user functions list
+\begin{itemize}
+\item \texttt{init} is called when the output 
+initialize. It is a good place if you want to allocate data or 
+save options passed by the output layer.
+\item \texttt{destroy} is called by the output when it 
+is destroying. Free ressources allocated into \texttt{init} if
+needef.
+\item \texttt{transmit} is called on each packet received by 
+the output. A pointer to the ressources that may have been
+allocated into \texttt{init} is passed as an argument of this
+call.
+\end{itemize}
+
+Once you you have written theses functions, you have to reference them
+into a \texttt{output\_driver\_t} (\ref{sect:output_output_driver_t})
+structure and pass it to the output driver register function to make
+it available to the \textcolor{darkblue}{multitouchd} outputs.
+
+%
+% SECTION API
+%
+\section{API}
+
+%
+% SUBSECTION init
+%
+\subsection{init}
+\label{sect:output_init}
+
+% init function Figure
+Your \texttt{init} function must follow this prototype:
+\begin{lstlisting}[language=C,
+caption=Output's init function prototype]
+int
+my_init_function
+                (const mt_output_t * output,
+                mt_output_driver_data_t ** driver_data, 
+                const peach_hash_t * options);
+\end{lstlisting}
+Where:
+\begin{itemize}
+\item \texttt{options} is a hash table containing options passed 
+to the output.
+\item \texttt{driver\_data} is a pointer of pointer to a 
+\texttt{mt\_output\_driver\_data\_t} structure you may define in 
+your source file according to the figure \footnote{Pay attention 
+to the underscore in front of the name of the structure: you must define 
+\texttt{\_output\_driver\_data\_t} and not
+\texttt{output\_driver\_data\_t}.}:
+% _output_driver_data_t Figure
+\begin{lstlisting}[language=C,
+caption=\_mt\_output\_driver\_data\_t structure]
+struct _mt_output_driver_data_t
+{
+    int whatever;
+    [...]
+};
+\end{lstlisting}
+If your input does \textbf{not} store data, you do \textbf{not} have to define 
+the structure, either setting the value of \texttt{*driver\_data}.
+\end{itemize}
+
+%
+% SUBSECTION destroy
+%
+\subsection{destroy}
+\label{sect:output_destroy}
+The \texttt{destroy} function is defined by:
+% destroy function Figure
+\begin{lstlisting}[language=C,
+caption=Output's destroy function prototype]
+int
+my_destroy_function
+            (const mt_output_t * output,
+            mt_output_driver_data_t * driver_data);
+\end{lstlisting}
+Where:
+% destroy funtion arguments list
+\begin{itemize}
+\item \texttt{output} is a pointer to the current input.
+It could be used to retrieve its name.
+\item \texttt{driver\_data} is a pointer to the area the 
+\texttt{init} function may have allocated, or is undefined if 
+the \texttt{init} function did not set its value.
+\end{itemize}
+
+%
+% SUBSECTION transmit 
+%
+\subsection{transmit}
+\label{sect:output_transmit}
+The \texttt{run} function is defined by:
+% transmit function Figure
+\begin{lstlisting}[language=C,
+caption=Output's transmit function prototype]
+int 
+my_transmit_function
+                (const mt_output_t * output,
+                mt_output_driver_data_t * driver_data,
+                const char * from,
+                const mt_packet_t * packet);
+\end{lstlisting}
+Where:
+% transmit function arguments list
+\begin{itemize}
+\item \texttt{output} can be used to retreive the name of the output.
+\item \texttt{driver\_data} is the pointer, defined or not, to the
+area the \texttt{init} function may have allocated.
+\item \texttt{from} is a \texttt{C} string which corresponds to the name
+of the emitter of the packet.
+\item \texttt{packet} is the packet to transmit. You do \textbf{not} have to
+destroy it, its owner will.
+\end{itemize}
+
+This function is responsible of transmitting packets, it could take different
+actions:
+\begin{itemize}
+\item Write packets into a file.
+\item Send packets over the network.
+\item Forward packets to an emulated system's device.
+\item Print a console message (debugging purpose).
+\end{itemize}
+
+The \texttt{transmit} function is called on each packet the output receive. It
+can perform blocking operation as when the output is destroying, the 
+\texttt{SIGUSR1} signal is sent to the current thread to exit from a blocked
+syscall.
+Access to the \texttt{driver\_data} do \textbf{not} need to be serialized, 
+because this area is \textbf{not} accessed by an other function until
+\texttt{transmit} has exited.
+%
+% SUBSECTION output_layer_driver_t
+%
+\subsection{mt\_output\_driver\_t}
+\label{sect:output_output_driver_t}
+As usual, a structure is provided to pass to the output driver system the
+three written functions : \texttt{init}
+(line \ref{code:output_init_pointer}), 
+\texttt{destroy} (line \ref{code:output_destroy_pointer}) \& 
+\texttt{transmit} (line \ref{code:output_transmit_pointer}). Your functions 
+must receive the same type of argument as the three function pointers 
+described into the structure and return the same type:
+% output_driver_t Figure
+\begin{lstlisting}[escapeinside={//}{\^^M}, language=C,
+caption=mt\_output\_driver\_t structure]
+typedef struct 
+{
+    int 
+    (*init)     //\label{code:output_init_pointer}
+                (const mt_output_t * output,
+                mt_output_driver_data_t ** driver_data, 
+                const peach_hash_t * options);
+
+    int 
+    (*destroy)  //\label{code:output_destroy_pointer}
+                (const mt_output_t * output,
+                mt_output_driver_data_t * driver_data);
+
+    int
+    (*transmit)  //\label{code:output_transmit_pointer}
+                (const mt_output_t * output,
+                mt_output_driver_data_t * driver_data,
+                const char * from,
+                const mt_packet_t * packet);
+}
+mt_output_driver_t;
+\end{lstlisting}
+
+%
+% SUBSECTION Registering & unregistering output driver
+%
+\subsection{Registering \& Unregistering driver}
+\label{sect:output_driver_register}
+\label{sect:output_driver_unregister}
+To register an output driver you have to call, providing a name 
+to reference the driver, the \texttt{mt\_output\_driver\_register} 
+function. Hence you will be able to use this output driver in the 
+\textcolor{darkblue}{Multitouch} library's functions related to output,
+by giving this name in the arguments.
+To unregister your driver, call the \texttt{mt\_output\_driver\_unregister} 
+function as describes in the next figure:
+\begin{lstlisting}[language=C,
+caption=Output's driver management functions]
+extern int
+mt_output_driver_register
+        (const char * name,
+        const mt_output_driver_t * output_driver);
+
+extern int
+mt_output_driver_unregister
+        (const char * name);
+\end{lstlisting}
+
+%
+% SECTION Setup examples
+%
+\section{Setup examples}
+TODO
+
+%
+% SECTION Example
+%
+\section{Complete module example}
+
+This module defines an output driver which writes to a file (path is 
+hardcoded) the packets it receives:
+\begin{lstlisting}[language=C,
+caption=Complete Output \& Module example]
+#include "peach/module.h"
+#include "peach/log.h"
+#include "lib/output.h"
+
+/* This path can passed as an argument of the 
+ * output driver, see processing engine example.
+ */
+#define FILE_PATH "/tmp/multitouch_output.dump"
+
+struct
+{
+    int file_descriptor;
+}
+_mt_output_driver_data_t;
+
+static int 
+output_example_driver_init
+            (mt_output_driver_data_t ** driver_data, 
+            const peach_hash_t * options)
+{
+    /* Allocate space to store the the output file 
+     * descriptor 
+     */
+    *driver_data = malloc(sizeof(**driver_data));
+    assert(*driver_data != 0);
+
+    /* Try to open the output device */
+    if (((*driver_data)->file_descriptor = 
+                open(FILE_PATH, O_WRONLY)) < 0) {
+        peach_log_err("Initialization error: could "
+                    "not open file '%s': '%s'.\n", 
+                    FILE_PATH, strerror(errno));
+
+        goto clean;
+    }
+
+    return 0;
+
+clean:
+    free(*driver_data);
+
+    return -1;
+}
+
+static int 
+output_example_driver_destroy
+            (mt_output_driver_data_t * driver_data)
+{
+    /* Close the output file */
+    close(driver_data->file_descriptor);
+
+    /* Free the allocated ressources */
+    free(driver_data);
+
+    return 0;
+}
+
+static int
+output_example_driver_run
+            (const mt_output_t * output,
+            mt_output_driver_data_t * driver_data,
+            const char * from,
+            const mt_packet_t * packet)
+{
+    /* Dump the packet into the file */
+    write(driver_data->output_descriptor,
+                packet_serialize(packet),
+                packet_get_length(packet));
+
+    return 0;
+}
+
+/* This structure store the address of the three
+ * driver's functions
+ */
+static mt_output_driver_t _example_driver =
+{
+    .init = output_example_driver_init,
+    .destroy = output_example_driver_destroy,
+    .run = output_example_driver_run
+};
+
+static int
+example_module_init(void)
+{
+    /* Register our drivers by passing the address
+     * of the mt_output_driver_t structure
+     * filled with the three driver's functions 
+     */
+    if (mt_output_driver_register("example", 
+                &_example_driver) != 0) 
+        goto exit_with_failure;
+
+    return 0;
+
+exit_with_failure:
+    return -1;
+}
+
+static int
+example_module_exit(void)
+{
+    /* Unregister all drivers */
+    mt_output_driver_unregister("example");
+    
+    return 0;
+}
+
+PEACH_MODULE_REGISTER("my_example_module", 1,
+            example_module_init,
+            example_module_exit)
+
+\end{lstlisting}

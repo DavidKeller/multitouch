@@ -1,0 +1,19 @@
+=========
+README
+=========
+
+Description
+------------
+ Multitouch is a library dedicated to multitouch
+ devices.
+ It aims to have a low memory footprint and serves
+ datas with a minimal latency.
+
+ It is highly customizable thanks to a modular system
+ coupled with many hook points along the processing.
+
+
+Development
+------------
+ Documentation intended for developers is stored 
+ under 'doc/'.

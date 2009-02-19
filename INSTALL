@@ -1,0 +1,17 @@
+===============
+Installation
+===============
+
+Requirements
+--------------
+ * 'cmake' to compile this project.
+
+Compilation
+-------------
+ $cd multitouchd
+ $cmake -DCMAKE_INSTALL_PREFIX=/usr .
+ $make
+
+Installation
+-------------
+ #make install

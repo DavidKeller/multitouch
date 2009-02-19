@@ -1,0 +1,10 @@
+=========
+News
+=========
+
+1.0.0
+--------------
+ * Added 'Output' api
+ * Added 'Input' api
+ * Added 'Processing Engine' api
+ * Added 'Event' api

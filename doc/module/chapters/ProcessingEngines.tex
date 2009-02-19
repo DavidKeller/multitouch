@@ -1,0 +1,497 @@
+\chapter{Processing engines}
+
+Processing engines are designed to extra process packets. Processing
+engines can be chained to permit multiple extra processings. You can
+view them as protocols of a one-way network stack. When a packet
+enters in this one-way stack, it pass through the first processing engine 
+of the stack, and if this processing engine accepts the packet, it is 
+processted to the next processing engine, and so on until it reachs the
+last processing engine. In the end, the packet can be read on the top of 
+the stack.
+Processing engines are implemented using the 
+\textcolor{darkblue}{Multitouch}'s \texttt{mt\_chain\_} api. This api
+offers to the developper the possibility to inject custom processing engine 
+logic, by writting a processing engine's driver.
+
+%
+% SECTION Where are they used
+%
+\section{Where are they used ?}
+
+Each \texttt{inputs} \& \texttt{outputs} use processing engines to 
+respectively perform post-processing on emited packets and 
+pre-processing on received packets. 
+
+%
+% SECTION How to write a processing engine
+%
+\section{How to write a processing engine driver}
+
+A processing engine (i.e. \texttt{mt\_chain\_layer\_t}) use a set of three 
+functions written by the module developer: \texttt{init} 
+(described section \ref{sect:pengine_init}), \texttt{destroy} 
+(\ref{sect:pengine_destroy}) 
+\& \texttt{process} (\ref{sect:pengine_process}).
+
+% Chain driver user functions list
+\begin{itemize}
+\item \texttt{init} is called when the processing engine 
+initialize. It is where you may want to allocate data or save options 
+passed by the chain layer.
+\item \texttt{destroy} is called by the processing engine when it 
+is destroying. Free ressources allocated into \texttt{init} if
+needed.
+\item \texttt{process} is called each time a packet pass throught 
+the processing engine. A pointer to the ressources \texttt{init} you may have
+allocated into the \texttt{init} function is passed as an argument of this 
+call. Also a function pointer is present in the arguments list: call it on
+each packet you want to process to the upper processing engine.
+\end{itemize}
+
+Once you have written theses functions, you have to reference them
+into a \texttt{mt\_chain\_layer\_driver\_t} 
+(\ref{sect:pengine_chain_layer_driver_t}) structure and pass it to the chain 
+layer driver register function to make it available to the 
+\textcolor{darkblue}{Multitouch} inputs \& outputs.
+
+You may write the processing engine driver function into a module and
+call the \texttt{mt\_chain\_layer\_driver\_register} 
+(\ref{sect:pengine_chain_driver_register}) into the module init 
+function, as \texttt{mt\_chain\_layer\_driver\_unregister}
+(\ref{sect:pengine_chain_driver_unregister}) into the module 
+destroy function.
+
+%
+% SECTION API
+%
+\section{API}
+
+%
+% SUBSECTION init
+%
+\subsection{init}
+\label{sect:pengine_init}
+
+Your \texttt{init} function must respect the following prototype: 
+% init function Figure
+\begin{lstlisting}[language=C, 
+caption=Processing engine's init function prototype]
+int 
+my_init_function
+        (mt_chain_layer_driver_data_t ** driver_data, 
+        const peach_hash_t * options);
+\end{lstlisting}
+Where: 
+% init function arguments list 
+\begin{itemize}
+\item \texttt{options} is a hash table containing options passed 
+to the processing engine.
+\item \texttt{driver\_data} is a pointer of pointer to a 
+\texttt{mt\_chain\_layer\_driver\_data\_t} structure you may define in 
+your source file according to the figure \footnote{Pay attention 
+to the underscore in front of the name of the structure: you must define 
+\texttt{\_mt\_chain\_layer\_driver\_data\_t} and not
+\texttt{mt\_chain\_layer\_driver\_data\_t}.}:
+% _chain_layer_driver_data_t Figure
+\begin{lstlisting}[language=C,
+caption=Processing engine's \_mt\_chain\_layer\_driver\_data\_t structure]
+struct _mt_chain_layer_driver_data_t
+{
+    int whatever;
+    [...]
+};
+\end{lstlisting}
+If your processing engine do \textbf{not} store data, you do \textbf{not} have 
+to define the structure, either setting the value of \texttt{*driver\_data}.
+\end{itemize}
+
+If the \texttt{init} function return a value different of \texttt{0}, the
+initialization of the processing engine is aborded, and 
+\texttt{\textcolor{darkblue}{Multitouch}} will inform the application
+with a proper failure message.
+
+
+%
+% SUBSECTION destroy
+%
+\subsection{destroy}
+\label{sect:pengine_destroy}
+
+The \texttt{destroy} function is defined by this prototype:
+\begin{lstlisting}[language=C,
+caption=Processing engine's exit function prototype]
+int 
+my_destroy_function
+            (mt_chain_layer_driver_data_t * driver_data);
+\end{lstlisting}
+Where:
+% destroy funtion arguments list
+\begin{itemize}
+\item \texttt{driver\_data} is a pointer to the area the 
+\texttt{init} function may have allocated, or is undefined if 
+the \texttt{init} function did not set its value.
+\end{itemize}
+
+It is responsible of freeing ressources the \texttt{init} function 
+may have allocated and can do further actions e.g. logging, 
+commiting results somewhere. 
+
+% destroy function Figure
+
+%
+% SUBSECTION process 
+%
+\subsection{process}
+\label{sect:pengine_process}
+
+The \texttt{process} function is defined in the following figure:
+% process function Figure
+\begin{lstlisting}[language=C,
+caption=Processing engine's process function prototype]
+int 
+my_process_function
+            (mt_chain_layer_t * layer,
+            mt_chain_layer_driver_data_t * driver_data,
+            const char * from,
+            const mt_packet_t * packet,
+            mt_chain_driver_accept_t accept);
+\end{lstlisting}
+Where:
+% process function arguments list
+\begin{itemize}
+\item \texttt{layer} is used by the \texttt{accept}
+function pointer and has not any other utility at the moment.
+\item \texttt{driver\_data} is the pointer, defined or not, to the
+area the \texttt{init} function may have allocated.
+\item \texttt{from} is the name of the sender of the packet, most of the
+time it is an input name if not process unit decided to change it.
+\item \texttt{packet} is the packet which is going through the
+processing unit. It is a const packet, so if you want to modify it,
+you will have to create a copy (use \texttt{mt\_packet\_copy}), to modify it 
+and to send it instead. You are responsible of deleting packet you create
+in this function. A good practice is to delete right after the call to the
+\texttt{accept} function, because when this call returns, the packet
+is not used anymore.
+\item \texttt{accept} is a function pointer,  you call on the packet 
+you want to send to the following processing engine. If you do not call it, 
+the packet is dropped and the following processing engine is never 
+called. You do not need to free the packet, it will be destroy by its owner.
+% accept function pointer Figure
+\begin{lstlisting}[language=C,
+caption=Processing engine's accept function pointer]
+typedef int
+(*mt_chain_driver_accept_t)
+        (mt_chain_layer_t * layer,
+        const char * from,
+        const mt_packet_t * packet);
+\end{lstlisting}
+\end{itemize}
+
+It is called when a packet transits into the processing engine. This
+function can:
+
+% transits function actions list
+\begin{itemize}
+\item Forge a new packet and send it to the following processing
+engine.
+\item Drop the current packet, preventing it to reach the following
+processing engine.
+\item Log informations about the current packet.
+\item ect..
+\end{itemize}
+
+Calls to the \texttt{process} function are serialized, so you can 
+safely use the \texttt{driver\_data} area without synchronization 
+mechanism (e.g. mutex).
+
+
+%
+% SUBSECTION chain_layer_driver_t
+%
+\subsection{mt\_chain\_layer\_driver\_t}
+\label{sect:pengine_chain_layer_driver_t}
+
+% chain_layer_driver_t Figure
+\begin{lstlisting}[escapeinside={//}{\^^M}, language=C,
+caption=mt\_chain\_layer\_driver\_t structure]
+typedef struct 
+{
+    int 
+    (*init)     //\label{code:pengine_init_pointer}
+            (mt_chain_layer_driver_data_t ** driver_data, 
+            const peach_hash_t * options);
+
+    int 
+    (*destroy)  //\label{code:pengine_destroy_pointer}
+            (mt_chain_layer_driver_data_t * driver_data);
+
+    int
+    (*process)  //\label{code:pengine_process_pointer}
+            (mt_chain_layer_t * layer,
+            mt_chain_layer_driver_data_t * driver_data,
+            const char * from,
+            const mt_packet_t * packet,
+            mt_chain_driver_accept_t accept);
+}
+mt_chain_layer_driver_t;
+\end{lstlisting}
+It is used to pass to the chain layer driver registering system the three
+driver functions you will write : \texttt{init} 
+(line \ref{code:pengine_init_pointer}), 
+\texttt{destroy} (line \ref{code:pengine_destroy_pointer}) \& 
+\texttt{process} (line \ref{code:pengine_process_pointer}). Your functions 
+must receive the same type of argument as the three function pointers 
+described into the structure and return the same type.
+
+%
+% SUBSECTION Registering & unregistering chain driver
+%
+\subsection{Registering \& Unregistering driver}
+\label{sect:pengine_chain_driver_register}
+\label{sect:pengine_chain_driver_unregister}
+
+To register a processing engine driver you have to call, providing a name 
+to reference the driver, the \texttt{mt\_chain\_layer\_driver\_register} 
+function. Hence you will be able to use this
+processing engine driver in the \textcolor{darkblue}{Multitouch} library's 
+functions related to processing engine, by giving this name in the arguments.
+To unregister, call the \texttt{mt\_chain\_layer\_driver\_unregister} 
+function as describes in the next figure:
+% chain driver register/unregister functions Figure
+\begin{lstlisting}[language=C,
+caption=Processing engine's driver registration functions]
+extern int
+mt_chain_layer_driver_register
+        (const char * name,
+        const mt_chain_layer_driver_t * layer_driver);
+
+extern int
+mt_chain_layer_driver_unregister
+        (const char * name);
+\end{lstlisting}
+
+%
+% SECTION Setup examples
+%
+\section{Setup examples}
+
+The following setup is defined: two inputs input$^A$ \& input$^B$
+and two outputs output$^A$ \& output$^B$.
+
+We want to prevent packets from input$^A$ to be sent by output$^A$ and
+transform the emission format of the outputs to xml.
+
+We have to code two processing engines: \texttt{filter\_input} \& \texttt{xml}.
+Then we add the \texttt{xml} processing engine on both inputs (or on both
+outputs) and the \texttt{filter\_output} on the output$^A$ configuring it
+to drop packets from emitter input$^A$.
+
+%
+% SUBSECTION Xml
+%
+\subsection{Xml}
+
+This processing engine will transform an event into an xml event.
+
+We decide to use the \texttt{xmllib2} for the transformation. We do not need
+to initialize component of the library, but we have to save options passed by
+the configuration system (e.g. the character encoding of the output).
+We will:
+
+\begin{enumerate}
+\item Create a new module.
+\item Write the processing engine \texttt{init} function which performs:
+\begin{enumerate}
+\item options saving.
+\item \texttt{libxml} copyright printing into the log.
+\end{enumerate}
+\item Write the processing engine \texttt{destroy} function to free ressources
+used by options saving.
+\item Code the processing engine \texttt{process} function to:
+\begin{enumerate}
+\item initialize a xml writer to output into a char buffer.
+\item open the packet, check its consistence and convert it using the 
+xml writer.
+\item destroy the xml writer.
+\item create a new packet using the char buffer and transfert it to
+the next processing engine using \texttt{accept} function.
+\end{enumerate}
+\item Register the processing engine into the module initialization function.
+\item Load the module.
+\item Configure outputs to use our processing engine using the dedicated 
+function.
+\end{enumerate}
+
+%
+% SUBSECTION Filter input
+%
+\subsection{Filter input}
+
+This processing engine filter packets going through itself by dropping packets
+according to the name of their emitter.
+
+We just have to save options (i.e. the name of the emitter you want 
+to drop packet) our functions will be quite simple. Here are the steps to 
+write the processing engine:
+
+\begin{enumerate}
+\item Create a new module.
+\item Write the processing engine \texttt{init} function which 
+performs options saving.
+\item Write the processing engine \texttt{destroy} function to free ressources
+used by options saving.
+\item Code the processing engine \texttt{process} function to check the name
+of the imitter of the current packet, and drop it by not calling 
+\texttt{accept} on it if the name is present in the list of emitters to 
+silent passed into the configuration.
+\item Register the processing engine into the module initialization function.
+\item Load the module.
+\item Configure $output^A$ to use our processing engine with $input^A$ passed
+as the emitters to silent list.
+\end{enumerate}
+
+%
+% SECTION Example
+%
+\section{Complete module example}
+
+This module defines a processing engine driver which prints into console the 
+emitter of each packet it receives:
+\begin{lstlisting}[language=C,
+caption=Complete Processing engine \& Module example]
+#include "peach/module.h"
+#include "peach/log.h"
+#include "lib/chain.h"
+
+struct _mt_chain_layer_driver_data_t
+{
+    uint64_t packets_count;
+    FILE * output_descriptor;
+};
+
+static int 
+chain_example_driver_init
+            (mt_chain_layer_driver_data_t ** driver_data, 
+            const peach_hash_t * options)
+{
+    const char * output;
+    /* Allocate space to store the packets counter and
+     * the output file descriptor 
+     */
+    *driver_data = malloc(sizeof(**driver_data));
+    assert(*driver_data != 0);
+
+    /* Set the packet counter to 0 */
+    (*driver_data)->packets_count = 0;
+
+    /* Retreive the path to the output device from the 
+     * arguments 
+     */
+    if ((output = peach_hash_get(options, "output", 
+                sizeof("output") - 1)) == 0) {
+        peach_log_err("Initialization error: "
+                    "'output' options is not passed"
+                    " to the chain driver.\n");
+
+        goto clean;
+    }
+
+    /* Try to open the output device */
+    if (((*driver_data)->output_descriptor = 
+                fopen(output, "w")) < 0) {
+        peach_log_err("Initialization error: could "
+                    "not open file '%s': '%s'.\n", 
+                    output, strerror(errno));
+
+        goto clean;
+    }
+
+    return 0;
+
+clean:
+    free(*driver_data);
+
+    return -1;
+}
+
+static int 
+chain_example_driver_destroy
+            (mt_chain_layer_driver_data_t * driver_data)
+{
+    /* Close the output file */
+    fclose(driver_data->output_descriptor);
+
+    /* Free the allocated ressources */
+    free(driver_data);
+
+    return 0;
+}
+
+/* This function is called on each packet */
+static int
+chain_example_driver_process
+            (mt_chain_layer_t * layer,
+            mt_chain_layer_driver_data_t * driver_data,
+            const char * from,
+            const mt_packet_t * packet,
+            mt_chain_driver_accept_t accept)
+{
+    driver_data->packets_count ++;
+
+    /* Print the message */
+    fprintf(driver_data->output_descriptor, 
+                "Packet No '%u' from '%s'\n",
+                driver_data->packets_count, from);
+
+    /* Validate packet (send it to the upper 
+     * processing engine). You have to pass the 'layer'
+     * argument to the accept function however you can
+     * pass a different 'from' string or a different 
+     * 'packet'. 
+     * This is usefull if you want to change the name 
+     * of the emitter or forge a new packet.
+     */
+    return (*accept)(layer, from, packet);
+}
+
+/* This structure store the address of the three
+ * driver's functions
+ */
+static mt_chain_layer_driver_t _example_driver =
+{
+    .init = chain_example_driver_init,
+    .destroy = chain_example_driver_destroy,
+    .process = chain_example_driver_process
+};
+
+static int
+example_module_init(void)
+{
+    /* Register our drivers by passing the address
+     * of the mt_chain_layer_driver_t structure
+     * filled with the three driver's functions 
+     */
+    if (mt_chain_layer_driver_register("example", 
+                &_example_driver) != 0) 
+        goto exit_with_failure;
+
+    return 0;
+
+exit_with_failure:
+    return -1;
+}
+
+static int
+example_module_exit(void)
+{
+    /* Unregister all drivers */
+    mt_chain_layer_driver_unregister("example");
+    
+    return 0;
+}
+
+PEACH_MODULE_REGISTER("my_example_module", 1,
+            example_module_init,
+            example_module_exit)
+
+\end{lstlisting}

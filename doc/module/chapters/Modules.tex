@@ -1,0 +1,215 @@
+\chapter{Modules}
+The \textcolor{darkblue}{Multitouch} library provide a way to inject code into 
+an application during runtime: modules. They are mainly used to add inputs,
+outputs and processing engine drivers, but could serve other purposes.
+In addition, \textcolor{darkblue}{Multitouch}'s library checks module 
+dependencies.
+
+Modules must contains at least two functions, \texttt{init} 
+(see \ref{sect:module_init}) \& \texttt{exit} (\ref{sect:module_exit}), 
+which are used to handle the module, registered using a \texttt{C} 
+pre-processing macro (\ref{sect:module_registration}).
+When a module is loaded, the library ensures that its dependencies are 
+respected (abort with an error message if \textbf{not}), then it calls the 
+\textit{module's init function}. When the application does \textbf{not} need 
+it anymore, the \textit{module's exit function} is called, and the module 
+is detached.
+
+Section \ref{sect:module_example} shows an example of a complete module.
+
+%
+% SECTION Init
+%
+\section{init}
+\label{sect:module_init}
+The \textit{init function} of your module is called when it is loaded. This 
+function should register your module's content with an application.
+It does \textbf{not} take argument but returns an error code, which equals 
+\texttt{0} if the function succeed, else the application will be notified by 
+the \textcolor{darkblue}{Multitouch} library that an error occured:
+% module init Figure
+\begin{lstlisting}[language=C, caption=Module's init function example]
+/* static means the function is not exported directly to
+ * the application, to prevent conflict 
+ */
+static int
+example_module_init(void)
+{
+    /* Print a message in the console */
+    peach_log_info("Example module loaded!\n");
+
+    /* Exit with success */
+    return 0; 
+}
+\end{lstlisting}
+
+This function is \textbf{not} a \textit{drivers's init function} as 
+described later in this document. For example, if your module declares two
+different drivers, with their respective \textit{drivers's init function}.
+Your source file should contain \textbf{two} \textit{drivers's init function} 
+and \textbf{one} \textit{module's init function} (that you use to register your
+two drivers).
+
+
+
+
+%
+% SECTION Exit
+%
+\section{exit}
+\label{sect:module_exit}
+The \textit{exit function} is called when the module is unloaded. Like the 
+\textit{init function}, it does \textbf{not} take argument but returns an 
+error code:
+% module exit Figure
+\begin{lstlisting}[language=C, caption=Module's exit function example]
+static int
+example_module_exit(void)
+{
+    peach_log_info("Example module unloaded!\n");
+
+    return 0; 
+}
+\end{lstlisting}
+
+This function is a good place to unregister the content of your module to
+prevent the application from using it whereas it is \textbf{not} available 
+anymore.
+
+%
+% SECTION Registration
+%
+\section{Registration}
+\label{sect:module_registration}
+A module needs some informations to be loadable:
+\begin{itemize}
+\item a \textit{name}.
+\item a \textit{version number}.
+\item its \textit{init function}'s address.
+\item its \textit{exit function}'s address.
+\item its \textit{depencies} with other modules.
+\end{itemize}
+Theses informations are saved by two \texttt{C} pre-processing macros:
+\begin{itemize}
+\item \texttt{PEACH\_MODULE\_REGISTER}.
+\item \texttt{PEACH\_MODULE\_DEPENDENCIES}.
+\end{itemize}
+The name and the version will be used by the \textcolor{darkblue}{Multitouch}
+library's dependencies resolver. The name and version of a dependencie must
+match exactly the name and the version of a loaded module. The library does 
+\textbf{not} assert that a loaded module, with a greater version, is compatible
+with a request of a lower version module.
+
+%
+% SUBSECTION L_MODULE_REGISTER
+%
+\subsection{PEACH\_MODULE\_REGISTER}
+This macros's arguments are:
+\begin{enumerate}
+\item the \textit{module name}, a \texttt{C} string.
+\item the \textit{module version}, a \texttt{C} \texttt{uint\_64\_t}.
+\item the \textit{module init function}, a function pointer (i.e function name).
+\item the \textit{module exit function}, a function pointer (i.e function name).
+\end{enumerate}
+
+%
+% SUBSECTION L_MODULE_DEPENDENCIES
+%
+\subsection{PEACH\_MODULE\_DEPENDENCIES}
+This pre-processing macro takes a list of \texttt{PEACH\_MODULE\_NEED} macros 
+as arguments. The macro \texttt{PEACH\_MODULE\_NEED} takes two arguments:
+\begin{enumerate}
+\item the \textit{requested module name}, a \texttt{C} string.
+\item the \textit{requested module version}, a \texttt{C} \texttt{uint\_64\_t}.
+\end{enumerate}
+If it is \textbf{not} passed argument or if not presented, the library asserts
+that the module does \textbf{not} have any dependencie!
+
+
+%
+% SECTION COMPILATION
+%
+\section{Compilation}
+Your module must compiled with the same flags used to compile 
+\textcolor{darkblue}{Multitouch} library (e.g. optimization, debug), and be 
+linked with it. If you have the \textcolor{darkblue}{Multitouch} project's 
+source tree, you just have to reference your module's source file in the 
+\texttt{CMakeList.txt} file located in the root directory as shown in the 
+following figure:
+% configuration Figure
+\begin{lstlisting}[language=make, caption=CMakeList.txt update]
+# This block schedules the compilation of 
+# module/my_module.c (your source file) to create 
+# 'my_module'  object.
+add_library(
+    my_module
+    MODULE
+
+    module/my_module.c
+)
+
+# This block tells that our object should be linked 
+# with the 'multitouch' library.
+target_link_libraries(
+    my_module
+
+    multitouch
+)
+
+# And this block controls the name of the generated
+# module.
+set_target_properties(
+    my_module
+    PROPERTIES
+
+    PREFIX ""
+    SUFFIX ${MODULE_EXTENSION}
+)
+\end{lstlisting}
+
+%
+% SECTION Complete module example
+%
+\section{Complete module example}
+\label{sect:module_example}
+Here is a complete module example which does \texttt{not} contain
+any driver:
+\begin{lstlisting}[language=C, caption=Complete module example]
+/* You can choose any name you desire for this function
+ * as long as it is corresponding to the name passed in 
+ * the PEACH_MODULE_REGISTER macro 
+ */
+static int
+example_module_init(void)
+{
+    /* Here is where you may call the functions to 
+     * register the drivers you have written into this 
+     * source file 
+     */
+    return 0; 
+}
+
+static int
+example_module_exit(void)
+{
+    /* And here is where you unregister them */
+    return 0; 
+}
+
+/* Your module is named "example_module" version 00 of 
+ * the 11 of January 2009 
+ */
+PEACH_MODULE_REGISTER("example_module", 2009011100,
+    example_module_init,
+    example_module_exit)
+
+/* It needs two modules: "needed_module" version 
+ * 2008122701 and "other_needed_module" version 
+ * 2008121100 
+ */
+PEACH_MODULE_DEPENDENCIES(
+    PEACH_MODULE_NEED("needed_module", 2008122701),
+    PEACH_MODULE_NEED("other_needed_module", 2008121100))
+
+\end{lstlisting}
+
